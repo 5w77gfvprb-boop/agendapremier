@@ -17,9 +17,7 @@ Crie um repositório **novo** (ex.: `agenda-premier`) e suba o conteúdo deste z
 
 ## 3. Site (Vercel)
 1. **Add New → Project**, escolha o repositório `agenda-premier`.
-2. Em *Environment Variables*:
-   - `NEXT_PUBLIC_SUPABASE_URL` = a Project URL
-   - `NEXT_PUBLIC_SUPABASE_ANON_KEY` = a chave pública
+2. *Environment Variables*: não precisa. O endereço e a chave pública do Supabase já estão em `src/lib/config.ts` (se um dia trocar de projeto do Supabase, mude lá).
 3. **Deploy**. No celular, abra o site e use “Adicionar à tela de início” para virar app.
 
 ## Primeiros passos no sistema
