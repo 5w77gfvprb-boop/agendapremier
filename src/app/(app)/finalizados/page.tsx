@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { AgendamentoForm, SELECT_AG } from "@/components/Agendamento";
 import { msgErro, useApp } from "@/components/AppShell";
 import { Button, Segmentado, Vazio, inputCls } from "@/components/ui";
-import { brl, dataBR, dataSP, hojeSP, horaSP, nomeSeguradora, placaFmt, SEGURADORAS, somarDias, type Agendamento } from "@/lib/agenda";
+import { dataBR, dataSP, hojeSP, horaSP, nomeSeguradora, placaFmt, SEGURADORAS, somarDias, type Agendamento } from "@/lib/agenda";
 
 type Aba = "receber" | "recebidos";
 
@@ -36,7 +36,6 @@ export default function Finalizados() {
     notify(recebido ? `${a.clientes?.nome ?? ""}: recebido.` : "Voltou para A receber.");
     carregar();
   }
-  const total = lista.reduce((s, a) => s + a.valor_total, 0);
   const antigos = aba === "receber" ? lista.filter((a) => dataSP(a.fim_real ?? a.fim) < somarDias(hojeSP(), -15)).length : 0;
 
   return (
@@ -56,7 +55,7 @@ export default function Finalizados() {
       </div>
 
       <div className="flex flex-wrap gap-x-6 gap-y-1 rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm">
-        <span>{aba === "receber" ? "Falta receber" : "Recebido no período"}: <b className={aba === "receber" && total ? "text-amber-700" : ""}>{brl(total)}</b> em {lista.length} serviço(s)</span>
+        <span>{aba === "receber" ? "Falta receber" : "Recebidos no período"}: <b className={aba === "receber" && lista.length ? "text-amber-700" : ""}>{lista.length} serviço(s)</b></span>
         {antigos ? <span className="text-red-700">{antigos} concluído(s) há mais de 15 dias ainda sem receber</span> : null}
       </div>
 
@@ -69,7 +68,6 @@ export default function Finalizados() {
               <li key={a.id} className="rounded-xl border border-neutral-200 bg-white p-3 text-sm">
                 <div className="flex items-baseline justify-between gap-2">
                   <span className="font-semibold">{a.clientes?.nome}</span>
-                  <span className="font-semibold tabular-nums">{brl(a.valor_total)}</span>
                 </div>
                 <div className="text-xs text-neutral-600">{(a.agendamento_itens ?? []).map((i) => i.descricao).join(", ")}</div>
                 <div className="mt-0.5 text-xs text-neutral-500">
@@ -92,7 +90,7 @@ export default function Finalizados() {
             <thead className="bg-neutral-50 text-xs text-neutral-500">
               <tr>
                 <th className="px-3 py-2 font-medium">Concluído</th><th className="px-3 py-2 font-medium">Cliente</th><th className="px-3 py-2 font-medium">Serviços</th>
-                <th className="px-3 py-2 font-medium">Seguradora</th><th className="px-3 py-2 text-right font-medium">Valor</th><th className="px-3 py-2"><span className="sr-only">Ações</span></th>
+                <th className="px-3 py-2 font-medium">Seguradora</th>{aba === "recebidos" ? <th className="px-3 py-2 font-medium">Recebido</th> : null}<th className="px-3 py-2"><span className="sr-only">Ações</span></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-100">
@@ -104,7 +102,7 @@ export default function Finalizados() {
                     <td className="px-3 py-2">{a.clientes?.nome}<div className="text-xs text-neutral-500">{a.veiculos ? `${placaFmt(a.veiculos.placa)} ${a.veiculos.modelo ?? ""}` : ""}</div></td>
                     <td className="px-3 py-2 text-xs">{(a.agendamento_itens ?? []).map((i) => i.descricao).join(", ")}</td>
                     <td className="px-3 py-2 text-xs">{nomeSeguradora(a.seguradora)}{a.cortesia ? " (cortesia)" : ""}{a.sinistro ? <div className="text-neutral-500">{a.sinistro}</div> : null}</td>
-                    <td className="whitespace-nowrap px-3 py-2 text-right font-medium tabular-nums">{brl(a.valor_total)}{aba === "recebidos" ? <div className="text-xs font-normal text-neutral-500">em {dataBR(a.pagamento_data)}</div> : null}</td>
+                    {aba === "recebidos" ? <td className="whitespace-nowrap px-3 py-2 tabular-nums">{dataBR(a.pagamento_data)}</td> : null}
                     <td className="whitespace-nowrap px-3 py-2 text-right">
                       {aba === "receber" ? <Button variant="primary" onClick={() => marcar(a, true)}>Recebi</Button> : <Button onClick={() => marcar(a, false)}>Desfazer</Button>}
                       <Button variant="ghost" aria-label="Editar serviço" onClick={() => setEditar(a)}><Pencil size={14} /></Button>

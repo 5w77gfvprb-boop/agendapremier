@@ -135,13 +135,12 @@ function Servicos() {
   const salvar = useSalvar(); const apagar = useApagar();
   const [novo, setNovo] = useState({ nome: "", duracao: "30", preco: "", local: "elevador" as TipoLocal | "" });
   return (
-    <Secao titulo="Serviços" desc="Tempo e preço padrão: ao agendar, o sistema soma sozinho (e dá para mudar em cada agendamento). Mudar aqui não altera agendamentos já feitos.">
-      <div className="mb-1 hidden gap-2 px-0.5 text-[11px] text-neutral-500 sm:flex"><span className="w-56">Serviço</span><span className="w-20">Minutos</span><span className="w-24">Preço R$</span><span>Onde</span></div>
+    <Secao titulo="Serviços" desc="Tempo padrão: ao agendar, o sistema soma sozinho (e dá para mudar em cada agendamento). Mudar aqui não altera agendamentos já feitos.">
+      <div className="mb-1 hidden gap-2 px-0.5 text-[11px] text-neutral-500 sm:flex"><span className="w-56">Serviço</span><span className="w-20">Minutos</span><span>Onde</span></div>
       <ul className="space-y-2">{cad.servicos.map((s) => <LinhaServico key={s.id} s={s} onSalvar={(x) => salvar("servicos", x, s.id)} onApagar={() => apagar("servicos", s.id)} />)}</ul>
       <div className="mt-3 flex flex-wrap gap-2">
         <input className={`${small} w-56`} placeholder="Ex.: Troca de óleo" value={novo.nome} onChange={(e) => setNovo({ ...novo, nome: e.target.value })} />
         <input className={`${small} w-20 text-right`} type="number" min={5} step={5} value={novo.duracao} onChange={(e) => setNovo({ ...novo, duracao: e.target.value })} aria-label="Minutos" />
-        <input className={`${small} w-24 text-right`} type="number" min={0} step="0.01" placeholder="0,00" value={novo.preco} onChange={(e) => setNovo({ ...novo, preco: e.target.value })} aria-label="Preço" />
         <select className={small} value={novo.local} onChange={(e) => setNovo({ ...novo, local: e.target.value as TipoLocal | "" })} aria-label="Onde"><option value="elevador">No elevador</option><option value="rampa">Na rampa</option><option value="">Sem elevador</option></select>
         <Button disabled={!novo.nome.trim() || !(Number(novo.duracao) >= 5)} onClick={async () => { if (await salvar("servicos", { nome: novo.nome.trim(), duracao_min: Number(novo.duracao), preco: Number(novo.preco || 0), local_tipo: novo.local || null })) setNovo({ nome: "", duracao: "30", preco: "", local: "elevador" }); }}><Plus size={14} /> Adicionar</Button>
       </div>
@@ -149,20 +148,19 @@ function Servicos() {
   );
 }
 function LinhaServico({ s, onSalvar, onApagar }: { s: Servico; onSalvar: (x: Record<string, unknown>) => void; onApagar: () => void }) {
-  const [nome, setNome] = useState(s.nome); const [dur, setDur] = useState(String(s.duracao_min)); const [preco, setPreco] = useState(String(s.preco));
+  const [nome, setNome] = useState(s.nome); const [dur, setDur] = useState(String(s.duracao_min));
   const [local, setLocal] = useState<TipoLocal | "">(s.local_tipo ?? ""); const [ativo, setAtivo] = useState(s.ativo);
   const [conf, setConf] = useState(false);
-  const mudou = nome !== s.nome || Number(dur) !== s.duracao_min || Number(preco) !== s.preco || (local || null) !== s.local_tipo || ativo !== s.ativo;
+  const mudou = nome !== s.nome || Number(dur) !== s.duracao_min || (local || null) !== s.local_tipo || ativo !== s.ativo;
   return (
     <li className="flex flex-wrap items-center gap-2">
       <input className={`${small} w-56`} value={nome} onChange={(e) => setNome(e.target.value)} aria-label="Serviço" />
       <input className={`${small} w-20 text-right`} type="number" min={5} step={5} value={dur} onChange={(e) => setDur(e.target.value)} aria-label="Minutos" title={duracaoTxt(Number(dur) || 0)} />
-      <input className={`${small} w-24 text-right`} type="number" min={0} step="0.01" value={preco} onChange={(e) => setPreco(e.target.value)} aria-label="Preço" />
       <select className={small} value={local} onChange={(e) => setLocal(e.target.value as TipoLocal | "")} aria-label="Onde"><option value="elevador">No elevador</option><option value="rampa">Na rampa</option><option value="">Sem elevador</option></select>
       <label className="flex items-center gap-1 text-xs"><input type="checkbox" checked={ativo} onChange={(e) => setAtivo(e.target.checked)} /> ativo</label>
-      {mudou ? <Button variant="primary" onClick={() => onSalvar({ nome: nome.trim(), duracao_min: Number(dur), preco: Number(preco || 0), local_tipo: local || null, ativo })} disabled={!nome.trim() || !(Number(dur) >= 5)}>Salvar</Button> : null}
+      {mudou ? <Button variant="primary" onClick={() => onSalvar({ nome: nome.trim(), duracao_min: Number(dur), local_tipo: local || null, ativo })} disabled={!nome.trim() || !(Number(dur) >= 5)}>Salvar</Button> : null}
       <Button variant="ghost" aria-label="Apagar" onClick={() => setConf(true)}><Trash2 size={14} /></Button>
-      {conf ? <ConfirmDialog titulo="Apagar serviço" texto={`Apagar ${s.nome}? Agendamentos antigos continuam com o nome e o valor.`} confirmar="Apagar" perigo onCancel={() => setConf(false)} onConfirm={() => { setConf(false); onApagar(); }} /> : null}
+      {conf ? <ConfirmDialog titulo="Apagar serviço" texto={`Apagar ${s.nome}? Agendamentos antigos continuam com o nome.`} confirmar="Apagar" perigo onCancel={() => setConf(false)} onConfirm={() => { setConf(false); onApagar(); }} /> : null}
     </li>
   );
 }

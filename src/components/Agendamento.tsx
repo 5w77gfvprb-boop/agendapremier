@@ -7,7 +7,7 @@ import { Selos } from "@/components/Selos";
 import { Fotos } from "@/components/Fotos";
 import { Button, ConfirmDialog, Field, Modal, inputCls } from "@/components/ui";
 import {
-  brl, conflitos, dataBR, hojeSP, mensagemPronto, dataSP, duracaoTxt, horaSP, horariosLivres, hhmm, inicioFora, instante, limparPlaca, somarExpediente, linkWhats, localNecessario, mensagemConfirmacao,
+  conflitos, dataBR, hojeSP, mensagemPronto, dataSP, duracaoTxt, horaSP, horariosLivres, hhmm, inicioFora, instante, limparPlaca, somarExpediente, linkWhats, localNecessario, mensagemConfirmacao,
   min, nomeDia, nomeSeguradora, placaFmt, placaValida, SEGURADORAS, somarDias, STATUS,
   type Agendamento, type Cliente, type Item, type Livre, type Seguradora, type Status, type TipoLocal, type Veiculo,
 } from "@/lib/agenda";
@@ -136,7 +136,6 @@ export function AgendamentoForm({ editar: base, remarcar = false, inicial, conta
   }, [data, sb, notify]);
 
   const duracao = itens.reduce((s, i) => s + Number(i.duracao_min || 0), 0);
-  const valor = itens.reduce((s, i) => s + Number(i.preco || 0), 0);
   const precisa = localNecessario(itens.map((i) => i.local_tipo));
   const usaElevador = precisa !== null;
   const locaisOk = ativosE.filter((l) => !precisa || l.tipo === precisa || (precisa === "rampa" && l.id === ele));
@@ -208,7 +207,7 @@ export function AgendamentoForm({ editar: base, remarcar = false, inicial, conta
     <Modal titulo={editar ? "Editar agendamento" : remarcar ? "Remarcar" : "Novo agendamento"} onClose={onClose} largura="max-w-3xl">
       <div className="space-y-5 text-sm">
         {remarcar && base ? <p className="rounded-lg bg-violet-50 px-3 py-2 text-xs text-violet-900">Remarcando o horário de {dataBR(dataSP(base.inicio))} às {horaSP(base.inicio)}. Escolha a nova data e hora: o horário antigo fica como “remarcado” e é liberado.</p> : null}
-        {concluido ? <p className="rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-900">Serviço já concluído: você pode corrigir os dados e os valores; ele continua concluído.</p> : null}
+        {concluido ? <p className="rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-900">Serviço já concluído: você pode corrigir os dados; ele continua concluído.</p> : null}
         {/* Cliente */}
         <section className="space-y-2">
           <h3 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-neutral-500"><User size={14} /> Cliente</h3>
@@ -309,14 +308,11 @@ export function AgendamentoForm({ editar: base, remarcar = false, inicial, conta
                   <label className="flex items-center gap-1 text-xs text-neutral-500">min
                     <input className="w-16 rounded border border-neutral-300 px-1.5 py-1 text-right text-sm" type="number" min={1} value={i.duracao_min} onChange={(e) => setItens((l) => l.map((x, j) => (j === k ? { ...x, duracao_min: Number(e.target.value) } : x)))} />
                   </label>
-                  <label className="flex items-center gap-1 text-xs text-neutral-500">R$
-                    <input className="w-20 rounded border border-neutral-300 px-1.5 py-1 text-right text-sm" type="number" min={0} step="0.01" value={i.preco} onChange={(e) => setItens((l) => l.map((x, j) => (j === k ? { ...x, preco: Number(e.target.value) } : x)))} />
-                  </label>
                   <button type="button" aria-label="Tirar serviço" className="rounded p-1 text-neutral-400 hover:text-red-600" onClick={() => setItens((l) => l.filter((_, j) => j !== k))}><Trash2 size={14} /></button>
                 </li>
               ))}
               <li className="flex justify-between bg-neutral-50 px-3 py-1.5 text-xs font-medium">
-                <span>Total: {duracaoTxt(duracao)}</span><span>{brl(valor)}</span>
+                <span>Total: {duracaoTxt(duracao)}</span>
               </li>
             </ul>
           ) : null}
@@ -325,7 +321,6 @@ export function AgendamentoForm({ editar: base, remarcar = false, inicial, conta
             <div className="mt-2 flex flex-wrap items-end gap-2">
               <input className={`${inputCls} !w-auto flex-1`} placeholder="Ex.: troca de bieleta" value={outro.descricao} onChange={(e) => setOutro({ ...outro, descricao: e.target.value })} />
               <input className={`${inputCls} !w-20`} type="number" min={1} placeholder="min" value={outro.duracao} onChange={(e) => setOutro({ ...outro, duracao: e.target.value })} />
-              <input className={`${inputCls} !w-24`} type="number" min={0} step="0.01" placeholder="R$" value={outro.preco} onChange={(e) => setOutro({ ...outro, preco: e.target.value })} />
               <select className={`${inputCls} !w-auto`} value={outro.local} onChange={(e) => setOutro({ ...outro, local: e.target.value as TipoLocal | "" })}><option value="elevador">no elevador</option><option value="rampa">na rampa</option><option value="">sem elevador</option></select>
               <Button type="button" onClick={addOutro}><Plus size={14} /> Pôr</Button>
             </div>
@@ -401,7 +396,7 @@ export function AgendamentoForm({ editar: base, remarcar = false, inicial, conta
         </section>
 
         <div className="flex flex-wrap items-center gap-2 border-t border-neutral-100 pt-3">
-          <span className="text-xs text-neutral-600">{duracao > 0 ? `${dataBR(data)} ${hora} · termina ${fimTxt} · ${duracaoTxt(duracao)} · ${brl(valor)}` : "Escolha os serviços"}</span>
+          <span className="text-xs text-neutral-600">{duracao > 0 ? `${dataBR(data)} ${hora} · termina ${fimTxt} · ${duracaoTxt(duracao)}` : "Escolha os serviços"}</span>
           <div className="ml-auto flex gap-2">
             <Button onClick={onClose}>Fechar</Button>
             <Button variant="primary" disabled={salvando || duracao <= 0 || !mec || !espera || (usaElevador && !ele) || (precisa === "elevador" && cad.locais.find((l) => l.id === ele)?.tipo === "rampa") || ocupados.length > 0 || (!!foraExp && !encaixe && !concluido)} onClick={salvar}>
@@ -558,7 +553,7 @@ export function DetalheAgendamento({ a, onClose, onMudou, onEditar, onRemarcar }
               <dt className="text-neutral-500">Veículo</dt><dd>{a.veiculos ? `${placaFmt(a.veiculos.placa)} ${a.veiculos.modelo ?? ""}` : "—"}</dd>
               <dt className="text-neutral-500">Telefone</dt><dd>{tel ?? "—"}</dd>
               <dt className="text-neutral-500">Serviços</dt>
-              <dd>{(a.agendamento_itens ?? []).map((i) => `${i.descricao} (${duracaoTxt(i.duracao_min)}, ${brl(i.preco)})`).join(" · ")}<div className="font-medium">{brl(a.valor_total)}</div></dd>
+              <dd>{(a.agendamento_itens ?? []).map((i) => `${i.descricao} (${duracaoTxt(i.duracao_min)})`).join(" · ")}</dd>
               <dt className="text-neutral-500">Cliente</dt>
               <dd>{a.espera === "aguarda" ? "Aguarda na oficina" : `Deixa o carro${a.entrega_prevista ? ` · entregar ${dataSP(a.entrega_prevista) === dataSP(a.inicio) ? "às" : `em ${dataBR(dataSP(a.entrega_prevista))} às`} ${horaSP(a.entrega_prevista)}` : ""}`}</dd>
             </>

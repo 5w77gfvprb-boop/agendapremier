@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronLeft, ChevronRight, Lock, MessageCircle, PhoneCall, Plus, UserRound } from "lucide-react";
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
 import { AgendamentoForm, BloqueioForm, DetalheAgendamento, buscarAgendamentos, nomeAg } from "@/components/Agendamento";
 import { ContatoForm } from "@/components/Contatos";
 import { IconesAg, LegendaSelos, Selos } from "@/components/Selos";
@@ -12,7 +12,14 @@ import {
   type Agendamento,
 } from "@/lib/agenda";
 
-type Visao = "locais" | "mecanicos" | "semana";
+type Visao = "locais" | "mecanicos" | "semana" | "mes";
+const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+/** Primeiro dia do mês de `data`, andando `n` meses. */
+const inicioMes = (data: string, n = 0) => {
+  const y = Number(data.slice(0, 4)), m = Number(data.slice(5, 7)) - 1 + n;
+  const yy = y + Math.floor(m / 12), mm = ((m % 12) + 12) % 12;
+  return `${yy}-${String(mm + 1).padStart(2, "0")}-01`;
+};
 const PX = 1.4;   // pixels por minuto (1 h = 84 px)
 
 export default function Page() {
@@ -20,7 +27,7 @@ export default function Page() {
 }
 
 function Agenda() {
-  const { sb, notify } = useApp();
+  const { sb, notify, cad } = useApp();
   const [data, setData] = useState(hojeSP());
   const [visao, setVisao] = useState<Visao>("locais");
   const [lista, setLista] = useState<Agendamento[]>([]);
@@ -38,14 +45,30 @@ function Agenda() {
   useEffect(() => { const t = setInterval(() => setAgora(agoraSP()), 60000); return () => clearInterval(t); }, []);
 
   const segunda = somarDias(data, -((diaSemana(data) + 6) % 7));
-  const carregar = useCallback(async () => {
-    try {
-      const de = visao === "semana" ? segunda : data, ate = visao === "semana" ? somarDias(segunda, 6) : data;
-      setLista(await buscarAgendamentos(sb, de, ate));
-    } catch (e) { notify(msgErro(e), "erro"); }
-  }, [sb, data, visao, segunda, notify]);
-  useEffect(() => { carregar(); }, [carregar]);
+  const fimSemana = [6, 5, 4, 3, 2, 1, 0].map((i) => somarDias(segunda, i)).find((d) => abreNoDia(d, cad.horarios)) ?? somarDias(segunda, 6);
+  // mês: semanas inteiras (segunda a domingo) que cobrem o mês
+  const mes1 = inicioMes(data);
+  const mesFim = somarDias(inicioMes(data, 1), -1);
+  const gradeIni = somarDias(mes1, -((diaSemana(mes1) + 6) % 7));
+  const gradeFim = somarDias(mesFim, (7 - diaSemana(mesFim)) % 7);
+  const de = visao === "semana" ? segunda : visao === "mes" ? gradeIni : data;
+  const ate = visao === "semana" ? somarDias(segunda, 6) : visao === "mes" ? gradeFim : data;
+  const [versao, setVersao] = useState(0);
+  const carregar = useCallback(() => setVersao((v) => v + 1), []);
+  useEffect(() => {
+    let ativo = true;
+    buscarAgendamentos(sb, de, ate).then((l) => { if (ativo) setLista(l); }).catch((e) => notify(msgErro(e), "erro"));
+    return () => { ativo = false; };   // trocou de dia/mês antes de chegar: ignora a resposta antiga
+  }, [sb, de, ate, notify, versao]);
 
+  const andar = (n: number) => {
+    if (visao === "mes") return setData(inicioMes(data, n));
+    if (visao === "semana") return setData(somarDias(data, 7 * n));
+    // um dia por vez, pulando os dias da semana em que a oficina não abre (sábado, domingo...)
+    let d = somarDias(data, n);
+    for (let i = 0; i < 6 && !abreNoDia(d, cad.horarios); i++) d = somarDias(d, n);
+    setData(d);
+  };
   const mudarVisao = (v: Visao) => { setVisao(v); try { localStorage.setItem("visao", v); } catch { /* sem armazenamento */ } };
   const visiveis = todos ? lista : lista.filter((a) => vale(a.status));
   const doDia = visiveis.filter((a) => faixa(a, data));
@@ -56,16 +79,16 @@ function Agenda() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex min-w-0 flex-wrap items-center gap-1">
-          <Button variant="ghost" aria-label="Anterior" onClick={() => setData(somarDias(data, visao === "semana" ? -7 : -1))}><ChevronLeft size={18} /></Button>
+          <Button variant="ghost" aria-label="Anterior" onClick={() => andar(-1)}><ChevronLeft size={18} /></Button>
           <Button onClick={() => setData(hojeSP())}>Hoje</Button>
-          <Button variant="ghost" aria-label="Próximo" onClick={() => setData(somarDias(data, visao === "semana" ? 7 : 1))}><ChevronRight size={18} /></Button>
+          <Button variant="ghost" aria-label="Próximo" onClick={() => andar(1)}><ChevronRight size={18} /></Button>
           <input type="date" aria-label="Ir para a data" className="ml-1 w-[9.5rem] min-w-0 rounded-lg border border-neutral-300 bg-white px-2 py-1.5 text-sm" value={data} onChange={(e) => e.target.value && setData(e.target.value)} />
         </div>
-        <h1 className="text-lg font-semibold capitalize text-neutral-900">
-          {visao === "semana" ? `Semana de ${dataBR(segunda).slice(0, 5)} a ${dataBR(somarDias(segunda, 6)).slice(0, 5)}` : `${nomeDia(data)}, ${dataBR(data)}`}
+        <h1 className="text-lg font-semibold text-neutral-900 first-letter:uppercase">
+          {visao === "mes" ? `${MESES[Number(data.slice(5, 7)) - 1]} de ${data.slice(0, 4)}` : visao === "semana" ? `Semana de ${dataBR(segunda).slice(0, 5)} a ${dataBR(fimSemana).slice(0, 5)}` : `${nomeDia(data)}, ${dataBR(data)}`}
         </h1>
         <div className="ml-auto flex flex-wrap gap-2">
-          <Segmentado valor={visao} onChange={mudarVisao} opcoes={[{ id: "locais", label: "Elevadores" }, { id: "mecanicos", label: "Mecânicos" }, { id: "semana", label: "Semana" }]} />
+          <Segmentado valor={visao} onChange={mudarVisao} opcoes={[{ id: "locais", label: "Elevadores" }, { id: "mecanicos", label: "Mecânicos" }, { id: "semana", label: "Semana" }, { id: "mes", label: "Mês" }]} />
           <Button onClick={() => setAnotar(true)}><PhoneCall size={15} /> Anotar contato</Button>
           <Button onClick={() => setConfirmarAmanha(true)}><MessageCircle size={15} /> Confirmar amanhã</Button>
           <Button onClick={() => setBloquear({ data })}><Lock size={15} /> Bloquear</Button>
@@ -73,7 +96,7 @@ function Agenda() {
         </div>
       </div>
 
-      {visao !== "semana" ? (
+      {visao === "locais" || visao === "mecanicos" ? (
         <>
           <ResumoDia data={data} doDia={doDia} servicos={servicosDia} />
           {ocultos || todos ? (
@@ -85,8 +108,10 @@ function Agenda() {
           <LegendaSelos />
           <GradeDia data={data} visao={visao} doDia={doDia} agora={agora} onVazio={(hora, rec) => setNovo({ data, hora, ...(visao === "locais" ? { local_id: rec } : { mecanico_id: rec }) })} onAbrir={setAberto} />
         </>
-      ) : (
+      ) : visao === "semana" ? (
         <Semana segunda={segunda} lista={visiveis} onAbrir={setAberto} onDia={(d) => { setData(d); mudarVisao("locais"); }} />
+      ) : (
+        <Mes data={data} ini={gradeIni} fim={gradeFim} lista={visiveis} onAbrir={setAberto} onDia={(d) => { setData(d); mudarVisao("locais"); }} />
       )}
 
       {novo ? <AgendamentoForm inicial={novo} onClose={() => setNovo(null)} onSalvo={carregar} /> : null}
@@ -117,7 +142,6 @@ function ResumoDia({ data, doDia, servicos }: { data: string; doDia: Agendamento
     }
     return out;
   }, [data, doDia, cad]);
-  const valor = servicos.reduce((s, a) => s + Number(a.valor_total), 0);
   const folga = cad.folgas.find((f) => f.dia === data);
   const bloqueios = doDia.filter((a) => a.tipo === "bloqueio" && vale(a.status));
   return (
@@ -126,7 +150,6 @@ function ResumoDia({ data, doDia, servicos }: { data: string; doDia: Agendamento
       <span><b>{servicos.length}</b> carro(s)</span>
       <span><b>{servicos.filter((a) => a.espera === "aguarda").length}</b> aguardando</span>
       <span><b>{servicos.filter((a) => a.espera === "deixa").length}</b> deixam o carro</span>
-      <span className="text-neutral-600">previsto {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(valor)}</span>
       {exp ? (
         <span className="text-xs text-neutral-600">
           Livre (mecânico + elevador){data === hojeSP() ? " daqui pra frente" : ""}: {janelas.length ? janelas.map(([a, b]) => `${a}–${b}`).join(", ") : "nada"}
@@ -237,9 +260,9 @@ function Bloco({ a, data, ini, visao, agora, onAbrir }: { a: Agendamento; data: 
 
 function Semana({ segunda, lista, onAbrir, onDia }: { segunda: string; lista: Agendamento[]; onAbrir: (a: Agendamento) => void; onDia: (d: string) => void }) {
   const { cad } = useApp();
-  const dias = Array.from({ length: 7 }, (_, i) => somarDias(segunda, i));
+  const dias = Array.from({ length: 7 }, (_, i) => somarDias(segunda, i)).filter((d) => abreNoDia(d, cad.horarios) || lista.some((a) => faixa(a, d)));
   return (
-    <div className="grid gap-2 md:grid-cols-7">
+    <div className="grid gap-2 md:[grid-template-columns:repeat(var(--n),minmax(0,1fr))]" style={{ "--n": dias.length } as CSSProperties}>
       {dias.map((d) => {
         const meus = lista.filter((a) => faixa(a, d));   // serviço de vários dias aparece em todos os dias
         const carros = meus.filter((a) => a.tipo === "servico" && vale(a.status)).length;
@@ -262,6 +285,65 @@ function Semana({ segunda, lista, onAbrir, onDia }: { segunda: string; lista: Ag
           </div>
         );
       })}
+    </div>
+  );
+}
+
+/** A oficina abre nesse dia da semana? (folga/feriado não conta aqui: o dia aparece, marcado como fechado) */
+const abreNoDia = (d: string, horarios: { dia_semana: number; aberto: boolean }[]) => horarios.some((h) => h.dia_semana === diaSemana(d) && h.aberto);
+
+/* Mês: um quadradinho por dia; no celular só a contagem, no computador os primeiros horários */
+function Mes({ data, ini, fim, lista, onAbrir, onDia }: { data: string; ini: string; fim: string; lista: Agendamento[]; onAbrir: (a: Agendamento) => void; onDia: (d: string) => void }) {
+  const { cad } = useApp();
+  const mes = data.slice(0, 7);
+  const todos: string[] = [];
+  for (let d = ini; d <= fim; d = somarDias(d, 1)) todos.push(d);
+  // só os dias da semana em que a oficina abre (ou que têm algo marcado por encaixe)
+  const usados = new Set(todos.filter((d) => abreNoDia(d, cad.horarios) || lista.some((a) => faixa(a, d))).map((d) => (diaSemana(d) + 6) % 7));
+  const colunas = [0, 1, 2, 3, 4, 5, 6].filter((i) => usados.has(i));
+  const dias = todos.filter((d) => usados.has((diaSemana(d) + 6) % 7));
+  const hoje = hojeSP();
+  const totalMes = new Set(lista.filter((a) => a.tipo === "servico" && vale(a.status) && dataSP(a.inicio).startsWith(mes)).map((a) => a.id)).size;
+  return (
+    <div className="space-y-2">
+      <p className="text-xs text-neutral-500">{totalMes} carro(s) marcados no mês. Toque num dia para abrir a agenda dele.</p>
+      <div className="grid gap-px overflow-hidden rounded-xl border border-neutral-200 bg-neutral-200" style={{ gridTemplateColumns: `repeat(${colunas.length || 1}, minmax(0, 1fr))` }}>
+        {colunas.map((i) => ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"][i]).map((n) => <div key={n} className="bg-neutral-50 py-1.5 text-center text-[11px] font-medium text-neutral-500">{n}</div>)}
+        {dias.map((d) => {
+          const fora = !d.startsWith(mes);
+          const fechado = !expediente(d, cad.horarios, cad.folgas);
+          const folga = cad.folgas.find((f) => f.dia === d);
+          const meus = lista.filter((a) => faixa(a, d)).sort((x, y) => x.inicio.localeCompare(y.inicio));
+          const carros = meus.filter((a) => a.tipo === "servico" && vale(a.status));
+          const MAX = 4;
+          return (
+            <div key={d} className={`min-h-16 min-w-0 p-1 sm:min-h-28 sm:p-1.5 ${fora ? "bg-neutral-50/70" : fechado ? "bg-neutral-50" : "bg-white"}`}>
+              <button onClick={() => onDia(d)} className="flex w-full flex-col items-start gap-0.5 text-left sm:flex-row sm:items-baseline sm:justify-between" aria-label={`Abrir ${dataBR(d)}`}>
+                <span className={`text-xs font-semibold tabular-nums ${d === hoje ? "rounded-full bg-red-600 px-1.5 text-white" : fora ? "text-neutral-400" : "text-neutral-800"}`}>{Number(d.slice(8))}</span>
+                {fechado ? <span className="truncate text-[10px] text-neutral-400">{folga?.motivo ?? "fechado"}</span>
+                  : carros.length ? <span className={`rounded px-1 text-[10px] font-medium ${fora ? "text-neutral-400" : "bg-neutral-900 text-white"}`}>{carros.length}<span className="hidden sm:inline"> carro{carros.length > 1 ? "s" : ""}</span></span> : null}
+              </button>
+              {/* pontinhos por mecânico no celular */}
+              {carros.length ? (
+                <div className="mt-1 flex flex-wrap gap-0.5 sm:hidden">
+                  {carros.slice(0, 8).map((a) => <span key={a.id} className="h-1.5 w-1.5 rounded-full" style={{ background: cad.mecanicos.find((m) => m.id === a.mecanico_id)?.cor ?? "#525252" }} />)}
+                </div>
+              ) : null}
+              <div className="mt-1 hidden space-y-0.5 sm:block">
+                {meus.slice(0, MAX).map((a) => (
+                  <button key={a.id} onClick={() => onAbrir(a)} className={`flex w-full items-center gap-1 truncate rounded px-1 py-0.5 text-left text-[11px] leading-tight hover:bg-neutral-100 ${vale(a.status) ? "" : "text-neutral-400 line-through"}`}
+                    style={{ borderLeft: `3px solid ${a.tipo === "bloqueio" ? "#a3a3a3" : cad.mecanicos.find((m) => m.id === a.mecanico_id)?.cor ?? "#525252"}` }}>
+                    <span className="shrink-0 tabular-nums text-neutral-500">{dataSP(a.inicio) === d ? horaSP(a.inicio) : "↳"}</span>
+                    <span className="min-w-0 truncate">{nomeAg(a)}</span>
+                    {vale(a.status) ? <IconesAg a={a} /> : null}
+                  </button>
+                ))}
+                {meus.length > MAX ? <button onClick={() => onDia(d)} className="px-1 text-[11px] font-medium text-neutral-600 hover:underline">+{meus.length - MAX} mais</button> : null}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

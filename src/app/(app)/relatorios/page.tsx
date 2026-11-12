@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { buscarAgendamentos } from "@/components/Agendamento";
 import { msgErro, useApp } from "@/components/AppShell";
 import { Segmentado, inputCls } from "@/components/ui";
-import { brl, dataBR, diaSemana, duracaoTxt, hojeSP, nomeDia, relatorio, somarDias, type Agendamento } from "@/lib/agenda";
+import { dataBR, diaSemana, duracaoTxt, hojeSP, nomeDia, relatorio, somarDias, type Agendamento } from "@/lib/agenda";
 
 type Per = "semana" | "semana_passada" | "mes" | "mes_passado" | "custom";
 const pct = (v: number) => `${(v * 100).toLocaleString("pt-BR", { maximumFractionDigits: 0 })}%`;
@@ -52,7 +52,7 @@ export default function Relatorios() {
 
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
         {[
-          ["Carros feitos", String(r.total.carros)], ["Valor dos serviços", brl(r.total.valor)],
+          ["Carros feitos", String(r.total.carros)], ["Cancelados", String(r.total.cancelados)],
           ["Média por dia", num(r.dias ? r.total.carros / r.dias : 0)], ["Faltas", String(r.total.faltas)], ["Remarcados", String(r.total.remarcados)],
         ].map(([t, v]) => (
           <div key={t} className="rounded-xl border border-neutral-200 bg-white px-4 py-3"><div className="text-xs text-neutral-500">{t}</div><div className="text-lg font-semibold">{v}</div></div>
@@ -62,9 +62,9 @@ export default function Relatorios() {
       <section className="rounded-xl border border-neutral-200 bg-white">
         <h2 className="border-b border-neutral-100 px-4 py-2.5 text-sm font-semibold">Por mecânico</h2>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[720px] text-left text-sm">
+          <table className="w-full min-w-[640px] text-left text-sm">
             <thead className="bg-neutral-50 text-xs text-neutral-500">
-              <tr><th className="px-4 py-2 font-medium">Mecânico</th><th className="px-3 py-2 text-right font-medium">Carros</th><th className="px-3 py-2 text-right font-medium">Média/dia</th><th className="px-3 py-2 text-right font-medium">Média/semana</th><th className="px-3 py-2 text-right font-medium">Horas marcadas</th><th className="px-3 py-2 text-right font-medium">Ocupação</th><th className="px-3 py-2 text-right font-medium">Valor</th><th className="px-3 py-2 text-right font-medium">Tempo real × previsto</th></tr>
+              <tr><th className="px-4 py-2 font-medium">Mecânico</th><th className="px-3 py-2 text-right font-medium">Carros</th><th className="px-3 py-2 text-right font-medium">Média/dia</th><th className="px-3 py-2 text-right font-medium">Média/semana</th><th className="px-3 py-2 text-right font-medium">Horas marcadas</th><th className="px-3 py-2 text-right font-medium">Ocupação</th><th className="px-3 py-2 text-right font-medium">Tempo real × previsto</th></tr>
             </thead>
             <tbody className="divide-y divide-neutral-100">
               {r.mecanicos.map((m) => (
@@ -75,7 +75,6 @@ export default function Relatorios() {
                   <td className="px-3 py-2 text-right tabular-nums">{num(m.porSemana)}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{duracaoTxt(Math.round(m.minutos))}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{pct(m.ocupacao)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{brl(m.valor)}</td>
                   <td className={`px-3 py-2 text-right tabular-nums ${m.realVsPrevisto !== null && m.realVsPrevisto > 0.1 ? "text-amber-700" : ""}`}>
                     {m.realVsPrevisto === null ? "—" : `${m.realVsPrevisto >= 0 ? "+" : ""}${pct(m.realVsPrevisto)} (${m.medidos})`}
                   </td>
@@ -95,16 +94,15 @@ export default function Relatorios() {
           <h2 className="border-b border-neutral-100 px-4 py-2.5 text-sm font-semibold">Serviços mais feitos</h2>
           {r.servicos.length === 0 ? <p className="px-4 py-6 text-center text-sm text-neutral-500">Nenhum serviço concluído no período.</p> : (
             <ul className="divide-y divide-neutral-100 text-sm">
-              {r.servicos.map((s) => <li key={s.nome} className="flex justify-between px-4 py-2"><span>{s.nome}</span><span className="tabular-nums text-neutral-700">{s.qtd} · {brl(s.valor)}</span></li>)}
+              {r.servicos.map((s) => <li key={s.nome} className="flex justify-between px-4 py-2"><span>{s.nome}</span><span className="tabular-nums text-neutral-700">{s.qtd}</span></li>)}
             </ul>
           )}
         </section>
         <section className="rounded-xl border border-neutral-200 bg-white">
           <h2 className="border-b border-neutral-100 px-4 py-2.5 text-sm font-semibold">Seguradoras e clientes</h2>
           <ul className="divide-y divide-neutral-100 text-sm">
-            {r.seguradoras.map((s) => <li key={s.id} className="flex justify-between px-4 py-2"><span>{s.nome}</span><span className="tabular-nums text-neutral-700">{s.carros} carro(s) · {brl(s.valor)}</span></li>)}
+            {r.seguradoras.map((s) => <li key={s.id} className="flex justify-between px-4 py-2"><span>{s.nome}</span><span className="tabular-nums text-neutral-700">{s.carros} carro(s)</span></li>)}
             <li className="flex justify-between px-4 py-2 text-neutral-600"><span>Aguardaram na oficina / deixaram o carro</span><span className="tabular-nums">{r.total.aguardou} / {r.total.deixou}</span></li>
-            <li className="flex justify-between px-4 py-2 text-neutral-600"><span>Cancelados</span><span className="tabular-nums">{r.total.cancelados}</span></li>
           </ul>
         </section>
       </div>

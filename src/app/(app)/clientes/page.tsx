@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { SELECT_AG } from "@/components/Agendamento";
 import { msgErro, useApp } from "@/components/AppShell";
 import { Button, ConfirmDialog, Field, Modal, Vazio, inputCls } from "@/components/ui";
-import { brl, dataBR, dataSP, horaSP, limparPlaca, nomeSeguradora, placaFmt, placaValida, SEGURADORAS, STATUS, type Agendamento, type Cliente, type Seguradora, type Veiculo } from "@/lib/agenda";
+import { dataBR, dataSP, horaSP, limparPlaca, nomeSeguradora, placaFmt, placaValida, SEGURADORAS, STATUS, type Agendamento, type Cliente, type Seguradora, type Veiculo } from "@/lib/agenda";
 
 type Linha = Cliente & { veiculos: Veiculo[] };
 
@@ -142,7 +142,7 @@ function ClienteModal({ c, onClose, onSalvo }: { c: Linha; onClose: () => void; 
         <div className="border-t border-neutral-100 pt-3">
           <div className="mb-1.5 flex items-baseline justify-between">
             <span className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Histórico</span>
-            <span className="text-xs text-neutral-500">{feitos.length} serviço(s) feitos · {brl(feitos.reduce((s, a) => s + a.valor_total, 0))}</span>
+            <span className="text-xs text-neutral-500">{feitos.length} serviço(s) feitos</span>
           </div>
           {hist.length === 0 ? <p className="text-xs text-neutral-500">Sem agendamentos.</p> : (
             <ul className="divide-y divide-neutral-100 rounded-lg border border-neutral-200">
@@ -151,7 +151,6 @@ function ClienteModal({ c, onClose, onSalvo }: { c: Linha; onClose: () => void; 
                   <span className="w-28 tabular-nums">{dataBR(dataSP(a.inicio))} {horaSP(a.inicio)}</span>
                   <span className="min-w-0 flex-1">{(a.agendamento_itens ?? []).map((i) => i.descricao).join(", ")} · {cad.mecanicos.find((m) => m.id === a.mecanico_id)?.nome}</span>
                   <span className={`rounded-full px-1.5 py-0.5 ring-1 ring-inset ${STATUS[a.status].cls}`}>{STATUS[a.status].nome}</span>
-                  <span className="w-20 text-right tabular-nums">{brl(a.valor_total)}</span>
                 </li>
               ))}
             </ul>

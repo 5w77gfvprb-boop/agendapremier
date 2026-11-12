@@ -6,7 +6,7 @@ import { AgendamentoForm, DetalheAgendamento, SELECT_AG } from "@/components/Age
 import { msgErro, useApp } from "@/components/AppShell";
 import { Button } from "@/components/ui";
 import { Selos } from "@/components/Selos";
-import { brl, dataBR, dataSP, hojeSP, horaSP, linkWhats, mensagemPronto, nomeSeguradora, placaFmt, type Agendamento } from "@/lib/agenda";
+import { dataBR, dataSP, hojeSP, horaSP, linkWhats, mensagemPronto, nomeSeguradora, placaFmt, type Agendamento } from "@/lib/agenda";
 
 const COLUNAS: { id: string; titulo: string; desc: string; filtro: (a: Agendamento) => boolean }[] = [
   { id: "chegou", titulo: "Chegou", desc: "esperando começar", filtro: (a) => (a.status === "agendado" || a.status === "confirmado") && !!a.chegou_em },
@@ -72,7 +72,7 @@ export default function Patio() {
                         </div>
                         <div className="text-xs text-neutral-600">{(a.agendamento_itens ?? []).map((i) => i.descricao).join(", ")}</div>
                         <div className="mt-1 text-xs text-neutral-500">
-                          {mec?.nome}{c.id === "servico" && loc ? ` · ${loc.nome}` : ""} · {nomeSeguradora(a.seguradora)} · {brl(a.valor_total)}
+                          {mec?.nome}{c.id === "servico" && loc ? ` · ${loc.nome}` : ""} · {nomeSeguradora(a.seguradora)}
                         </div>
                         <div className="text-xs text-neutral-500">
                           {c.id === "pronto" ? `pronto ${desde(a.fim_real)}` : c.id === "chegou" ? `chegou ${desde(a.chegou_em)} · marcado ${horaSP(a.inicio)}` : c.id === "servico" ? `começou ${desde(a.inicio_real)} · previsto até ${desde(a.fim)}` : `na oficina desde ${desde(a.chegou_em)}`}
