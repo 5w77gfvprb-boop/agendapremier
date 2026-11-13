@@ -105,7 +105,10 @@ function Agenda() {
               Mostrar cancelados, faltas, remarcados e aguardando peça{ocultos ? ` (${ocultos} neste dia)` : ""}
             </label>
           ) : null}
-          <LegendaSelos />
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <LegendaSelos />
+            <span className="text-[11px] text-neutral-500">Para mover: no computador, clique e arraste; no celular/iPad, segure o bloco até vibrar e arraste.</span>
+          </div>
           <GradeDia data={data} visao={visao} doDia={doDia} agora={agora} onVazio={(hora, rec) => setNovo({ data, hora, ...(visao === "locais" ? { local_id: rec } : { mecanico_id: rec }) })} onAbrir={setAberto} onMovido={carregar} />
         </>
       ) : visao === "semana" ? (
@@ -167,7 +170,7 @@ function ResumoDia({ data, doDia, servicos }: { data: string; doDia: Agendamento
 /** Dá para arrastar qualquer um que começa neste dia (serviço de vários dias, pelo primeiro dia), menos o já remarcado. */
 const podeArrastar = (a: Agendamento, data: string) => a.status !== "remarcado" && dataSP(a.inicio) === data;
 
-type Pendente = { a: Agendamento; x0: number; y0: number; offset: number; ativo: boolean; timer?: ReturnType<typeof setTimeout>; x: number; y: number; alvo?: { col: string; min: number } };
+type Pendente = { a: Agendamento; x0: number; y0: number; offset: number; ativo: boolean; timer?: ReturnType<typeof setTimeout>; x: number; y: number; alvo?: { col: string; min: number }; toque?: number };
 
 function GradeDia({ data, visao, doDia, agora, onVazio, onAbrir, onMovido }: {
   data: string; visao: "locais" | "mecanicos"; doDia: Agendamento[]; agora: { data: string; hora: string };
@@ -178,7 +181,37 @@ function GradeDia({ data, visao, doDia, agora, onVazio, onAbrir, onMovido }: {
   const pend = useRef<Pendente | null>(null);
   const ignorarClique = useRef(false);
   const [arr, setArr] = useState<{ id: string; col: string; min: number; dur: number } | null>(null);
-  const [mover, setMover] = useState<{ a: Agendamento; col: string; min: number } | null>(null);
+  const [mover, setMover] = useState<{ a: Agendamento; col: string; min: number; erroInicial?: string } | null>(null);
+  const [ultimo, setUltimo] = useState<{ a: Agendamento; col: string; min: number } | null>(null);
+  const { sb, notify } = useApp();
+  const paramsMover = (a: Agendamento, col: string, m: number, encaixe: boolean) => ({
+    p_id: a.id, p_inicio: instante(data, hhmm(m)),
+    p_mecanico_id: visao === "mecanicos" ? (col || null) : a.mecanico_id,
+    p_local_id: visao === "locais" ? (col || null) : a.local_id,
+    p_encaixe: encaixe,
+  });
+  // soltou: move na hora (só pergunta antes quando muda a situação: aguardando peça, cancelado, faltou)
+  async function soltar(a: Agendamento, col: string, m: number) {
+    if (a.status === "pausado" || a.status === "cancelado" || a.status === "faltou") { setMover({ a, col, min: m }); return; }
+    const { error } = await sb.rpc("mover_agendamento", paramsMover(a, col, m, false));
+    if (error) { setMover({ a, col, min: m, erroInicial: msgErro(error) }); return; }
+    onMovido();
+    setUltimo({ a, col, min: m });
+  }
+  async function desfazer() {
+    const u = ultimo;
+    if (!u) return;
+    setUltimo(null);
+    const a = u.a;
+    const { error } = await sb.rpc("mover_agendamento", { p_id: a.id, p_inicio: a.inicio, p_mecanico_id: a.mecanico_id, p_local_id: a.local_id, p_encaixe: true });
+    if (error) { notify(msgErro(error), "erro"); return; }
+    // devolve a confirmação que o cliente já tinha dado / a mensagem já mandada
+    if (a.confirmado_em || a.status === "confirmado") await sb.rpc("marcar_confirmacao", { p_id: a.id, p_acao: "confirmou" });
+    else if (a.confirmacao_enviada_em) await sb.rpc("marcar_confirmacao", { p_id: a.id, p_acao: "enviada" });
+    notify("Voltou para onde estava.");
+    onMovido();
+  }
+  useEffect(() => { if (!ultimo) return; const t = setTimeout(() => setUltimo(null), 12000); return () => clearTimeout(t); }, [ultimo]);
   const exp = expediente(data, cad.horarios, cad.folgas);
   const ab = Math.min(exp?.abre ?? 8 * 60, ...doDia.map((a) => faixa(a, data)![0]));
   const fe = Math.max(exp?.fecha ?? 18 * 60, ...doDia.map((a) => faixa(a, data)![1]));
@@ -238,7 +271,7 @@ function GradeDia({ data, visao, doDia, agora, onVazio, onAbrir, onMovido }: {
       setArr(null);
       const v = p.alvo;
       const origem = (visao === "locais" ? p.a.local_id : p.a.mecanico_id) ?? "";
-      if (v && (v.col !== origem || v.min !== min(horaSP(p.a.inicio)))) setMover({ a: p.a, col: v.col, min: v.min });
+      if (v && (v.col !== origem || v.min !== min(horaSP(p.a.inicio)))) soltar(p.a, v.col, v.min);
     }
   }
   function aoCancelar() { terminar(); setArr(null); }
@@ -255,7 +288,9 @@ function GradeDia({ data, visao, doDia, agora, onVazio, onAbrir, onMovido }: {
     atualizar();
     requestAnimationFrame(laco);
   }
+  // mouse / caneta / trackpad: eventos de ponteiro. Dedo: eventos de toque (abaixo), que o Safari do iPhone/iPad respeita.
   const iniciar = (e: React.PointerEvent, a: Agendamento) => {
+    if (e.pointerType === "touch") return;
     if (!podeArrastar(a, data) || (e.pointerType === "mouse" && e.button !== 0)) return;
     const topo = (e.currentTarget as HTMLElement).getBoundingClientRect().top;
     const p: Pendente = { a, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, offset: (e.clientY - topo) / PX, ativo: false };
@@ -272,11 +307,50 @@ function GradeDia({ data, visao, doDia, agora, onVazio, onAbrir, onMovido }: {
     window.addEventListener("pointerup", aoSoltar);
     window.addEventListener("pointercancel", aoCancelar);
   };
-  // enquanto arrasta no celular, o dedo não rola a tela
+  const iniciarToque = (e: React.TouchEvent, a: Agendamento) => {
+    if (!podeArrastar(a, data) || e.touches.length !== 1) return;
+    const t = e.touches[0];
+    const topo = (e.currentTarget as HTMLElement).getBoundingClientRect().top;
+    const p: Pendente = { a, x0: t.clientX, y0: t.clientY, x: t.clientX, y: t.clientY, offset: (t.clientY - topo) / PX, ativo: false, toque: t.identifier };
+    p.timer = setTimeout(() => {
+      if (pend.current !== p) return;
+      p.ativo = true;
+      setArr({ id: a.id, col: (visao === "locais" ? a.local_id : a.mecanico_id) ?? "", min: min(horaSP(a.inicio)), dur: faixa(a, data)![1] - faixa(a, data)![0] });
+      try { navigator.vibrate?.(15); } catch { /* sem vibração */ }
+      laco();
+    }, 400);
+    pend.current = p;
+  };
+  // toque: mover/soltar ficam na janela, com touchmove "não passivo" para poder travar a rolagem enquanto arrasta
+  const toqueRef = useRef({ mover: (_e: TouchEvent) => {}, soltar: (_e: TouchEvent) => {} });
+  useEffect(() => {   // atualiza a cada render (usa ini/colunas atuais)
+  toqueRef.current.mover = (e: TouchEvent) => {
+    const p = pend.current;
+    if (!p || p.toque === undefined) return;
+    const t = Array.from(e.touches).find((x) => x.identifier === p.toque);
+    if (!t) return;
+    if (!p.ativo) {
+      if (Math.hypot(t.clientX - p.x0, t.clientY - p.y0) > 8) { if (p.timer) clearTimeout(p.timer); pend.current = null; }   // mexeu antes de segurar = rolar a tela
+      return;
+    }
+    e.preventDefault();
+    p.x = t.clientX; p.y = t.clientY;
+    atualizar();
+  };
+  toqueRef.current.soltar = (e: TouchEvent) => {
+    const p = pend.current;
+    if (!p || p.toque === undefined) return;
+    if (p.ativo) e.preventDefault();   // não vira clique
+    aoSoltar();
+  };
+  });
   useEffect(() => {
-    const trava = (e: TouchEvent) => { if (pend.current?.ativo) e.preventDefault(); };
-    window.addEventListener("touchmove", trava, { passive: false });
-    return () => window.removeEventListener("touchmove", trava);
+    const mover = (e: TouchEvent) => toqueRef.current.mover(e);
+    const soltar = (e: TouchEvent) => toqueRef.current.soltar(e);
+    window.addEventListener("touchmove", mover, { passive: false });
+    window.addEventListener("touchend", soltar, { passive: false });
+    window.addEventListener("touchcancel", soltar);
+    return () => { window.removeEventListener("touchmove", mover); window.removeEventListener("touchend", soltar); window.removeEventListener("touchcancel", soltar); };
   }, []);
   const nomeCol = (id: string) => (id ? colunas.find((c) => c.id === id)?.nome ?? "?" : "Sem elevador");
 
@@ -321,7 +395,7 @@ function GradeDia({ data, visao, doDia, agora, onVazio, onAbrir, onMovido }: {
                 {agoraMin !== null && agoraMin >= ini && agoraMin <= fim ? <div className="absolute inset-x-0 z-10 border-t-2 border-red-500" style={{ top: (agoraMin - ini) * PX }} /> : null}
                 {meus.map((a) => (
                   <Bloco key={a.id} a={a} data={data} ini={ini} visao={visao} agora={agora} arrastando={arr?.id === a.id}
-                    onAbrir={(x) => { if (!ignorarClique.current) onAbrir(x); }} onPointerDown={(e) => iniciar(e, a)} />
+                    onAbrir={(x) => { if (!ignorarClique.current) onAbrir(x); }} onPointerDown={(e) => iniciar(e, a)} onTouchStart={(e) => iniciarToque(e, a)} />
                 ))}
                 {arr && arr.col === c.id ? (
                   <div className="pointer-events-none absolute left-1 right-1 z-30 rounded-md border-2 border-dashed border-neutral-900 bg-neutral-900/10 px-1.5 py-1 text-[11px] font-semibold text-neutral-900"
@@ -336,15 +410,29 @@ function GradeDia({ data, visao, doDia, agora, onVazio, onAbrir, onMovido }: {
       </div>
     </div>
     {mover ? <MoverModal data={data} visao={visao} {...mover} nomeCol={nomeCol} onClose={() => setMover(null)} onMovido={onMovido} /> : null}
+    {ultimo ? (() => {
+      const u = ultimo; const mudouHora = hhmm(u.min) !== horaSP(u.a.inicio);
+      const zap = mudouHora && u.a.tipo === "servico" && (u.a.status === "agendado" || u.a.status === "confirmado") ? linkWhats(u.a.clientes?.telefone ?? null,
+        `Olá, ${(u.a.clientes?.nome ?? "").split(" ")[0]}! Aqui é do Centro Automotivo Premier. Seu horário mudou para ${data === hojeSP() ? "hoje" : data === somarDias(hojeSP(), 1) ? "amanhã" : `${nomeDia(data)}, ${dataBR(data)}`} às ${hhmm(u.min)}${u.a.veiculos ? ` (veículo ${placaFmt(u.a.veiculos.placa)})` : ""}. Pode confirmar?`) : null;
+      return (
+        <div className="fixed inset-x-3 bottom-20 z-50 mx-auto flex max-w-xl flex-wrap items-center gap-2 rounded-xl bg-neutral-900 px-4 py-3 text-sm text-white shadow-xl md:bottom-6">
+          <span className="min-w-0 flex-1">{nomeAg(u.a)} → <b>{hhmm(u.min)} · {nomeCol(u.col)}</b></span>
+          {zap ? <a href={zap} target="_blank" rel="noreferrer" onClick={() => { sb.rpc("marcar_confirmacao", { p_id: u.a.id, p_acao: "enviada" }).then(() => onMovido()); setUltimo(null); }}
+            className="inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2.5 py-1 text-xs font-medium"><MessageCircle size={13} /> Avisar cliente</a> : null}
+          <button className="rounded-md bg-white/15 px-2.5 py-1 text-xs font-medium hover:bg-white/25" onClick={desfazer}>Desfazer</button>
+          <button className="px-1 text-xs text-white/70 hover:text-white" onClick={() => setUltimo(null)} aria-label="Fechar">✕</button>
+        </div>
+      );
+    })() : null}
     </>
   );
 }
 
-function MoverModal({ a, col, min: m, data, visao, nomeCol, onClose, onMovido }: {
-  a: Agendamento; col: string; min: number; data: string; visao: "locais" | "mecanicos"; nomeCol: (id: string) => string; onClose: () => void; onMovido: () => void;
+function MoverModal({ a, col, min: m, data, visao, nomeCol, onClose, onMovido, erroInicial }: {
+  a: Agendamento; col: string; min: number; data: string; visao: "locais" | "mecanicos"; nomeCol: (id: string) => string; onClose: () => void; onMovido: () => void; erroInicial?: string;
 }) {
   const { sb, notify } = useApp();
-  const [erro, setErro] = useState("");
+  const [erro, setErro] = useState(erroInicial ?? "");
   const [salvando, setSalvando] = useState(false);
   const [feito, setFeito] = useState(false);
   const origemCol = (visao === "locais" ? a.local_id : a.mecanico_id) ?? "";
@@ -376,7 +464,7 @@ function MoverModal({ a, col, min: m, data, visao, nomeCol, onClose, onMovido }:
     `Olá, ${(a.clientes?.nome ?? "").split(" ")[0]}! Aqui é do Centro Automotivo Premier. Seu horário mudou para ${data === hojeSP() ? "hoje" : data === somarDias(hojeSP(), 1) ? "amanhã" : `${nomeDia(data)}, ${dataBR(data)}`} às ${horaNova}${a.veiculos ? ` (veículo ${placaFmt(a.veiculos.placa)})` : ""}. Pode confirmar?`) : null;
 
   return (
-    <Modal titulo={feito ? "Movido" : "Mover agendamento"} onClose={onClose} largura="max-w-md">
+    <Modal titulo={feito ? "Movido" : erroInicial ? "Não deu para mover" : "Mover agendamento"} onClose={onClose} largura="max-w-md">
       {feito ? (
         <div className="space-y-3 text-sm">
           <p>{nomeAg(a)} agora está às <b>{horaNova}</b>. Quer avisar o cliente do novo horário?</p>
@@ -408,9 +496,9 @@ function MoverModal({ a, col, min: m, data, visao, nomeCol, onClose, onMovido }:
   );
 }
 
-function Bloco({ a, data, ini, visao, agora, onAbrir, onPointerDown, arrastando }: {
+function Bloco({ a, data, ini, visao, agora, onAbrir, onPointerDown, onTouchStart, arrastando }: {
   a: Agendamento; data: string; ini: number; visao: "locais" | "mecanicos"; agora: { data: string; hora: string };
-  onAbrir: (a: Agendamento) => void; onPointerDown: (e: React.PointerEvent) => void; arrastando: boolean;
+  onAbrir: (a: Agendamento) => void; onPointerDown: (e: React.PointerEvent) => void; onTouchStart: (e: React.TouchEvent) => void; arrastando: boolean;
 }) {
   const { cad } = useApp();
   const f = faixa(a, data)!;
@@ -424,6 +512,7 @@ function Bloco({ a, data, ini, visao, agora, onAbrir, onPointerDown, arrastando 
     <button
       onClick={(e) => { e.stopPropagation(); onAbrir(a); }}
       onPointerDown={onPointerDown}
+      onTouchStart={onTouchStart}
       onContextMenu={(e) => { if (podeArrastar(a, data)) e.preventDefault(); }}
       title={podeArrastar(a, data) ? "Clique para abrir · segure e arraste para mudar de horário ou de coluna" : undefined}
       className={`absolute left-1 right-1 z-20 select-none [-webkit-touch-callout:none] ${podeArrastar(a, data) ? "cursor-grab active:cursor-grabbing" : ""} ${arrastando ? "opacity-40" : ""} overflow-hidden rounded-md border px-1.5 py-1 text-left text-[11px] leading-tight shadow-sm ${morto ? "border-dashed border-neutral-300 bg-white/70 text-neutral-400 line-through" : pausa ? "border-dashed border-orange-300 bg-orange-50/70 text-neutral-700" : a.tipo === "bloqueio" ? "border-neutral-300 bg-[repeating-linear-gradient(45deg,#f5f5f5,#f5f5f5_6px,#e5e5e5_6px,#e5e5e5_12px)] text-neutral-600" : "bg-white text-neutral-800"} ${atrasado ? "ring-2 ring-red-500" : ""}`}
