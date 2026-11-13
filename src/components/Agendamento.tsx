@@ -472,6 +472,17 @@ export function ChecklistModal({ a, onClose, onFeito }: { a: Agendamento; onClos
       <div className="space-y-4 text-sm">
         {itens.length === 0 ? <p className="text-xs text-neutral-500">Nenhum item no checklist (dá para cadastrar em Ajustes).</p> : (
           <ul className="space-y-2">
+            {itens.length > 1 ? (
+              <li>
+                <label className={`flex items-center gap-2.5 rounded-lg border-2 px-3 py-2.5 font-semibold ${tudo ? "border-emerald-500 bg-emerald-50 text-emerald-900" : "border-neutral-300 bg-neutral-50"}`}>
+                  <input type="checkbox" className="h-4 w-4" checked={tudo}
+                    ref={(el) => { if (el) el.indeterminate = marcados.size > 0 && !tudo; }}
+                    onChange={(e) => setMarcados(e.target.checked ? new Set(itens.map((i) => i.id)) : new Set())} />
+                  <span>{tudo ? "Tudo conferido" : "Marcar tudo como conferido"}</span>
+                  <span className="ml-auto text-xs font-normal text-neutral-500">{itens.filter((i) => marcados.has(i.id)).length}/{itens.length}</span>
+                </label>
+              </li>
+            ) : null}
             {itens.map((i) => (
               <li key={i.id}>
                 <label className="flex items-start gap-2.5 rounded-lg border border-neutral-200 px-3 py-2.5">

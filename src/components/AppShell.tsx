@@ -35,8 +35,9 @@ const NAV: { href: string; label: string; icon: typeof CalendarDays; soDesktop?:
 
 export const msgErro = (e: unknown) => {
   if (ehFalhaDeConexao(e)) return "Sem conexão com o banco. Confira a internet e tente de novo; se continuar, o Supabase pode estar pausado (abra a agenda de novo para ver como reativar).";
-  const m = (e as { message?: string })?.message ?? String(e);
-  return m.replace(/^.*?ERROR:\s*/, "");
+  const m = (e as { message?: unknown })?.message;
+  const t = (typeof m === "string" ? m : String(m ?? e ?? "")).replace(/^.*?ERROR:\s*/, "").trim();
+  return t && t !== "[object Object]" ? t : "Não deu certo. Tente de novo; se continuar, atualize a página.";
 };
 
 export default function AppShell({ children }: { children: ReactNode }) {

@@ -5,7 +5,7 @@ Sistema **separado** do financeiro: outro banco (Supabase), outro site (Vercel) 
 ## 1. Banco de dados (Supabase)
 1. Em https://supabase.com, crie um **projeto novo** (ex.: `agenda-premier`), região São Paulo.
 2. Abra **SQL Editor → New query**, cole todo o arquivo `supabase/migrations/0001_agenda.sql` e clique em **Run**.
-   Depois, cada um numa query nova e nesta ordem: `0002_patio_fotos.sql`, `0003_correcoes.sql`, `0004_backup_ativo.sql` e `0005_cortesia_confirmacao.sql`.
+   Depois, cada um numa query nova e nesta ordem: `0002_patio_fotos.sql`, `0003_correcoes.sql`, `0004_backup_ativo.sql`, `0005_cortesia_confirmacao.sql` e `0006_arrastar.sql`.
    Já rodou algum antes? Rode só os que faltam (rodar de novo também não estraga nada).
    Ele já cadastra: Elevador 1, 2 e 3, Rampa de alinhamento, os mecânicos Eric e Thales, e os serviços Alinhamento (rampa) e Balanceamento (elevador), os dois com 30 min e preço zerado (ajuste em Ajustes).
    Pode rodar de novo sem problema: não duplica nada.
